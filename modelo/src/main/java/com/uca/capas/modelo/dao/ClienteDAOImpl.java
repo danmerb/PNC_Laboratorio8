@@ -1,5 +1,6 @@
 package com.uca.capas.modelo.dao;
 
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Types;
@@ -47,6 +48,9 @@ public class ClienteDAOImpl implements ClienteDAO {
 	 */
 	@PersistenceContext(unitName = "modelo-persistence")
 	EntityManager entityManager;
+	
+	@Autowired
+	JdbcTemplate jdbcTemplate;
 	
 	@Override
 	public List<Cliente> findAll() throws DataAccessException {
@@ -198,6 +202,73 @@ public class ClienteDAOImpl implements ClienteDAO {
 		List<Cliente> resultado = entityManager.createQuery(query).getResultList();
 
 		return resultado;
+	}
+
+	@Override
+	public int insertClienteAutoId(Cliente c) {
+		SimpleJdbcInsert jdbcInsert = new SimpleJdbcInsert(jdbcTemplate)
+				.withSchemaName("store")
+				.withTableName("cliente")
+				.usingGeneratedKeyColumns("c_cliente");
+		//valores del insert
+		Map<String, Object> parametros = new HashMap<String, Object>();
+		parametros.put("s_nombres", c.getSnombres());
+		parametros.put("s_apellidos", c.getSapellidos());
+		parametros.put("f_nacimiento", c.getFnacimiento());
+		parametros.put("b_activo", c.getBactivo());
+		//devuelve la llave generada
+		Number id = jdbcInsert.executeAndReturnKey(parametros);
+		return id.intValue();
+	}
+	private static final String sql = "UPDATE store.cliente SET s_nombres=?, s_apellidos=?, f_nacimiento=?, b_activo=? WHERE c_cliente=?";
+
+	@Override
+	public void updateCliente(Cliente c) {
+		Object[] parametros = new Object[]{c.getSnombres(), c.getSapellidos(), c.getFnacimiento(),c.getBactivo(), c.getCcliente()};
+		jdbcTemplate.update(sql, parametros);
+		
+	}
+
+	@Override
+	public int ejecutarProcedimientoJdbc(Integer cliente, Boolean estado) {
+		// TODO Auto-generated method stub
+		SimpleJdbcCall jdbcCall = new SimpleJdbcCall(jdbcTemplate)
+				.withSchemaName("store")
+				.withProcedureName("sp_actualizar_cliente")
+				.withoutProcedureColumnMetaDataAccess();
+		
+		jdbcCall.addDeclaredParameter(new SqlParameter("P_CLIENTE", Types.INTEGER));
+		jdbcCall.addDeclaredParameter(new SqlParameter("P_ESTADO", Types.BOOLEAN));
+		jdbcCall.addDeclaredParameter(new SqlOutParameter("P_SALIDA", Types.INTEGER));
+
+		Map<String, Object> parametros = new HashMap<>();
+		parametros.put("P_CLIENTE", cliente);
+		parametros.put("P_ESTADO", estado);
+
+		Map<String, Object> out = jdbcCall.execute(parametros);
+		return Integer.parseInt(out.get("P_SALIDA").toString());
+	}
+
+	@Override
+	public int[][] batchInsertVehiculos(List<Vehiculo> vehiculos) {
+		// TODO Auto-generated method stub
+		String sql = "INSERT INTO store.vehiculo" +
+				"(c_vehiculo, s_marca, s_modelo, s_chassis, f_compra, b_estado, c_cliente) VALUES(?,?,?,?,?,?,?)";
+
+		int [][] resultado = jdbcTemplate.batchUpdate(sql, vehiculos, 1000, new ParameterizedPreparedStatementSetter<Vehiculo>() {
+			@Override
+			public void setValues(PreparedStatement ps, Vehiculo vehiculo) throws SQLException {
+				ps.setInt(1, vehiculo.getCvehiculo());
+				ps.setString(2, vehiculo.getSmarca());
+				ps.setString(3, vehiculo.getSmodelo());
+				ps.setString(4, vehiculo.getSchassis());
+				Date fcompra = new Date(vehiculo.getFcompra().getTime().getTime());
+				ps.setDate(5,fcompra);
+				ps.setBoolean(6, vehiculo.getBestado());
+				ps.setInt(7, vehiculo.getCcliente());
+			}
+		});
+		return  resultado;
 	}
 	
 }
